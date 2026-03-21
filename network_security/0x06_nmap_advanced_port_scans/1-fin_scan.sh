@@ -1,1 +1,1 @@
-sudo nmap -sF -p80,85 -f -T2 $1
+sudo nmap -sF -p80,85 -ff -T2 $1
