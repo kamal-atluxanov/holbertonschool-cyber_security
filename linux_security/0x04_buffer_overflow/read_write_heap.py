@@ -1,81 +1,72 @@
 #!/usr/bin/python3
 """
 Locates and replaces a string in the heap of a running process.
+Usage: read_write_heap.py pid search_string replace_string
 """
 
 import sys
-import os
-
-
-def print_error_and_exit(msg):
-    """Prints error message and exits with status 1."""
-    print(msg, file=sys.stderr)
-    sys.exit(1)
-
 
 def read_write_heap():
-    """Main function to perform heap manipulation."""
+    """Finds and replaces a string in the heap of a process."""
+
+    # 1. Validation: Check if exactly 3 arguments are passed (plus script name)
     if len(sys.argv) != 4:
-        print_error_and_exit("Usage: read_write_heap.py pid search_string replace_string")
+        print("Usage: read_write_heap.py pid search_string replace_string")
+        sys.exit(1)
 
     pid = sys.argv
-    search_str = sys.argv
-    replace_str = sys.argv
+    search_string = sys.argv
+    replace_string = sys.argv
 
-    if not pid.isdigit():
-        print_error_and_exit("Error: PID must be a number.")
+    # Ensure search string isn't empty
+    if search_string == "":
+        return
 
-    maps_path = f"/proc/{pid}/maps"
-    mem_path = f"/proc/{pid}/mem"
-
-    # 1. Find the heap boundaries
-    heap_start = None
-    heap_end = None
-
+    # 2. Find the heap in /proc/[pid]/maps
     try:
-        with open(maps_path, 'r') as f_maps:
-            for line in f_maps:
-                if '[heap]' in line:
+        with open(f"/proc/{pid}/maps", "r") as maps_file:
+            heap_start = None
+            heap_end = None
+
+            for line in maps_file:
+                if "[heap]" in line:
+                    # Line format: 555e646e0000-555e64701000 rw-p 00000000 00:00 0 [heap]
                     parts = line.split()
                     addr_range = parts.split('-')
                     heap_start = int(addr_range, 16)
                     heap_end = int(addr_range, 16)
                     break
-    except Exception as e:
-        print_error_and_exit(f"Error accessing maps for PID {pid}: {e}")
 
-    if heap_start is None:
-        print_error_and_exit(f"Error: Could not find heap for PID {pid}")
+            if heap_start is None or heap_end is None:
+                print(f"Error: [heap] not found for PID {pid}")
+                sys.exit(1)
 
-    print(f"[*] Found heap at: [{hex(heap_start)} - {hex(heap_end)}]")
+        # 3. Read and Write in /proc/[pid]/mem
+        with open(f"/proc/{pid}/mem", "rb+") as mem_file:
+            # Move pointer to start of heap and read its content
+            mem_file.seek(heap_start)
+            heap_data = mem_file.read(heap_end - heap_start)
 
-    # 2. Search and replace in memory
-    try:
-        with open(mem_path, 'rb+') as f_mem:
-            # Move to the start of the heap
-            f_mem.seek(heap_start)
-            heap_content = f_mem.read(heap_end - heap_start)
-
-            # Find the search string in binary format
+            # Find the string in the bytes data
             try:
-                index = heap_content.index(search_str.encode('ascii'))
+                # Convert search string to bytes
+                offset = heap_data.index(bytes(search_string, "ascii"))
             except ValueError:
-                print_error_and_exit(f"Error: String '{search_str}' not found in heap.")
+                print(f"Error: String '{search_string}' not found in heap.")
+                sys.exit(1)
 
-            # Calculate absolute offset
-            target_addr = heap_start + index
-            print(f"[*] Found '{search_str}' at {hex(target_addr)}")
+            # Move pointer to the exact location where the string was found
+            mem_file.seek(heap_start + offset)
 
-            # 3. Perform the overwrite
-            f_mem.seek(target_addr)
-            f_mem.write(replace_str.encode('ascii') + b'\0') # Null terminator included
-            print(f"[*] Replaced with '{replace_str}'")
+            # Write the replacement string (as bytes)
+            mem_file.write(bytes(replace_string, "ascii"))
 
     except PermissionError:
-        print_error_and_exit("Error: Run as root/sudo to access another process's memory.")
+        print("Permission denied: Try running with sudo.")
+        sys.exit(1)
     except Exception as e:
-        print_error_and_exit(f"An unexpected error occurred: {e}")
-
+        print(f"Error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     read_write_heap()
