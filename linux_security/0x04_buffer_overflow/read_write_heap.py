@@ -6,56 +6,67 @@ Bu script işləyən prosesin heap-ində string tapır və dəyişdirir.
 
 import sys
 
-def solve():
-    # 1. Arqumentlərin yoxlanılması (Dəqiq 3 dənə olmalıdır)
+def read_write_heap():
+    # 1. Arqumentlərin düzgünlüyünü yoxlayırıq
     if len(sys.argv) != 4:
         print("Usage: read_write_heap.py pid search_string replace_string")
         sys.exit(1)
 
     pid = sys.argv
-    search_string = sys.argv
-    replace_string = sys.argv
+    search_str = sys.argv
+    replace_str = sys.argv
 
-    # Boş string axtarırıqsa, heç nə etməyək
-    if not search_string:
+    # Boş string axtarılırsa, heç nə etmədən çıxırıq
+    if not search_str:
         return
 
     try:
-        # 2. Maps faylını oxuyub heap-in yerini tapırıq
+        # 2. Heap-in başladığı və bitdiyi ünvanı /proc/[pid]/maps-dan tapırıq
         with open(f"/proc/{pid}/maps", "r") as maps_file:
+            heap_start = None
+            heap_end = None
             for line in maps_file:
                 if "[heap]" in line:
-                    # Adres hissəsini götürürük (məs: 00400000-00421000)
+                    # Nümunə format: 00c61000-00c82000 rw-p ... [heap]
                     addr_range = line.split()
-                    start_addr, end_addr = [int(x, 16) for x in addr_range.split('-')]
+                    start_hex, end_hex = addr_range.split('-')
+                    heap_start = int(start_hex, 16)
+                    heap_end = int(end_hex, 16)
                     break
-            else:
-                # Əgər heap tapılmasa
+
+            # Əgər heap tapılmasa, çıxırıq
+            if heap_start is None:
                 return
 
-        # 3. Mem faylını "rb+" (oxumaq və yazmaq) rejimində açırıq
+        # 3. /proc/[pid]/mem faylına daxil olub axtarış və dəyişiklik edirik
         with open(f"/proc/{pid}/mem", "rb+") as mem_file:
-            # Heap-in başladığı yerə gedirik
-            mem_file.seek(start_addr)
-            heap_data = mem_file.read(end_addr - start_addr)
+            # Heap-in yerləşdiyi hissəni oxuyuruq
+            mem_file.seek(heap_start)
+            heap_data = mem_file.read(heap_end - heap_start)
 
-            # Stringi axtarırıq (bytes formatında)
+            # Stringi tapırıq (ASCII baytlar kimi)
             try:
-                index = heap_data.index(search_string.encode('ascii'))
+                index = heap_data.index(search_str.encode('ascii'))
             except ValueError:
-                # String tapılmasa heç nə etmə
+                # Əgər string tapılmasa, çıxırıq
                 return
 
-            # Stringin tapıldığı tam ünvanı hesablayırıq
-            found_at = start_addr + index
+            # Yazılacaq tam ünvanı hesablayırıq
+            target_addr = heap_start + index
 
             # Həmin ünvana gedirik və yeni stringi yazırıq
-            mem_file.seek(found_at)
-            mem_file.write(replace_string.encode('ascii'))
+            mem_file.seek(target_addr)
+            mem_file.write(replace_str.encode('ascii'))
 
+            # Qeyd: Bəzi hallarda stringin sonuna NULL byte (\0) qoymaq lazımdır:
+            # mem_file.write(replace_str.encode('ascii') + b'\x00')
+
+    except (PermissionError, ProcessLookupError):
+        # İcazə və ya proses tapılmama xətası zamanı 1 ilə çıxırıq
+        sys.exit(1)
     except Exception:
-        # Hər hansı icazə və ya sistem xətası olsa exit(1)
+        # Digər gözlənilməz xətalar üçün
         sys.exit(1)
 
 if __name__ == "__main__":
-    solve()
+    read_write_heap()
