@@ -1,81 +1,81 @@
 #!/usr/bin/python3
 """
-İşləyən prosesin heap sahəsindəki stringi tapan və onu əvəz edən skript.
-İstifadə: ./read_write_heap.py pid search_string replace_string
+Locates and replaces a string in the heap of a running process.
 """
 
 import sys
+import os
 
-def find_and_replace_in_heap():
-    """
-    Prosesin ID-sini (pid) alır, heap sahəsini tapır və
-    göstərilən stringi yenisi ilə əvəz edir.
-    """
-    # 1. Arqument sayını yoxla (Düzgün istifadə xətası üçün status 1)
+
+def print_error_and_exit(msg):
+    """Prints error message and exits with status 1."""
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def read_write_heap():
+    """Main function to perform heap manipulation."""
     if len(sys.argv) != 4:
-        print("Usage: read_write_heap.py pid search_string replace_string")
-        sys.exit(1)
+        print_error_and_exit("Usage: read_write_heap.py pid search_string replace_string")
 
     pid = sys.argv
     search_str = sys.argv
     replace_str = sys.argv
 
-    # PID-nin rəqəm olub-olmadığını yoxla
     if not pid.isdigit():
-        print("Usage: read_write_heap.py pid search_string replace_string")
-        sys.exit(1)
+        print_error_and_exit("Error: PID must be a number.")
 
     maps_path = f"/proc/{pid}/maps"
     mem_path = f"/proc/{pid}/mem"
 
+    # 1. Find the heap boundaries
+    heap_start = None
+    heap_end = None
+
     try:
-        # 2. Maps faylını oxuyub heap sahəsini tapırıq
-        with open(maps_path, 'r') as maps_file:
-            heap_line = None
-            for line in maps_file:
-                if "[heap]" in line:
-                    heap_line = line
+        with open(maps_path, 'r') as f_maps:
+            for line in f_maps:
+                if '[heap]' in line:
+                    parts = line.split()
+                    addr_range = parts.split('-')
+                    heap_start = int(addr_range, 16)
+                    heap_end = int(addr_range, 16)
                     break
+    except Exception as e:
+        print_error_and_exit(f"Error accessing maps for PID {pid}: {e}")
 
-            if not heap_line:
-                # Heap tapılmadısa səssizcə çıxmaq və ya xəta vermək olar
-                sys.exit(1)
+    if heap_start is None:
+        print_error_and_exit(f"Error: Could not find heap for PID {pid}")
 
-            # Ünvan hissəsini ayırırıq (məs: 555e646e0000-555e64701000)
-            addr_range = heap_line.split().split('-')
-            start_addr = int(addr_range, 16)
-            end_addr = int(addr_range, 16)
+    print(f"[*] Found heap at: [{hex(heap_start)} - {hex(heap_end)}]")
 
-        # 3. Mem faylını ikili formatda (binary) yazıb-oxumaq üçün açırıq
-        with open(mem_path, 'rb+') as mem_file:
-            mem_file.seek(start_addr)
-            heap_data = mem_file.read(end_addr - start_addr)
+    # 2. Search and replace in memory
+    try:
+        with open(mem_path, 'rb+') as f_mem:
+            # Move to the start of the heap
+            f_mem.seek(heap_start)
+            heap_content = f_mem.read(heap_end - heap_start)
 
-            # Axtarılan stringi bayt formatına çeviririk
-            search_bytes = search_str.encode('ascii')
+            # Find the search string in binary format
+            try:
+                index = heap_content.index(search_str.encode('ascii'))
+            except ValueError:
+                print_error_and_exit(f"Error: String '{search_str}' not found in heap.")
 
-            # Stringin yerini (offset) tapırıq
-            offset = heap_data.find(search_bytes)
-            if offset == -1:
-                # Əgər string tapılmadısa, sistem bunu xəta sayır
-                sys.exit(1)
+            # Calculate absolute offset
+            target_addr = heap_start + index
+            print(f"[*] Found '{search_str}' at {hex(target_addr)}")
 
-            # Yazılacaq ünvanı müəyyən edib yeni mətni yazırıq
-            mem_file.seek(start_addr + offset)
+            # 3. Perform the overwrite
+            f_mem.seek(target_addr)
+            f_mem.write(replace_str.encode('ascii') + b'\0') # Null terminator included
+            print(f"[*] Replaced with '{replace_str}'")
 
-            # QEYD: Yeni stringi yazırıq. Uzunluq fərqi varsa belə,
-            # biz sadəcə verilən mətni yazırıq (ASCII).
-            mem_file.write(replace_str.encode('ascii'))
+    except PermissionError:
+        print_error_and_exit("Error: Run as root/sudo to access another process's memory.")
+    except Exception as e:
+        print_error_and_exit(f"An unexpected error occurred: {e}")
 
-            # Yalnız bir dəfə uğur mesajı çap edirik
-            print("SUCCESS!")
-
-    except (PermissionError, FileNotFoundError):
-        # İcazə yoxdursa və ya proses tapılmadısa
-        sys.exit(1)
-    except Exception:
-        # Digər gözlənilməz xətalar üçün
-        sys.exit(1)
 
 if __name__ == "__main__":
-    find_and_replace_in_heap()
+    read_write_heap()
