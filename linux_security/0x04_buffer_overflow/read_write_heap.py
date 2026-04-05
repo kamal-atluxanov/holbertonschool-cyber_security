@@ -73,8 +73,6 @@ def read_write_heap(pid, search_string, replace_string):
             mem_file.seek(heap_start + offset)
             mem_file.write(replace_bytes.ljust(len(search_bytes), b'\x00'))
 
-            print(f"Successfully replaced '{search_string}' with '{replace_string}' in the heap.")
-
     except PermissionError:
         print("Error: Permission denied. Try running as sudo.")
         sys.exit(1)
