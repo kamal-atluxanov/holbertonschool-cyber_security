@@ -1,15 +1,13 @@
 #!/usr/bin/python3
 """
-Locates and replaces a string in the heap of a running process.
-Usage: read_write_heap.py pid search_string replace_string
+Holberton WebSec 0x04 - Read/Write Heap
+Bu script işləyən prosesin heap-ində string tapır və dəyişdirir.
 """
 
 import sys
 
-def read_write_heap():
-    """Finds and replaces a string in the heap of a process."""
-
-    # 1. Validation: Check if exactly 3 arguments are passed (plus script name)
+def solve():
+    # 1. Arqumentlərin yoxlanılması (Dəqiq 3 dənə olmalıdır)
     if len(sys.argv) != 4:
         print("Usage: read_write_heap.py pid search_string replace_string")
         sys.exit(1)
@@ -18,55 +16,46 @@ def read_write_heap():
     search_string = sys.argv
     replace_string = sys.argv
 
-    # Ensure search string isn't empty
-    if search_string == "":
+    # Boş string axtarırıqsa, heç nə etməyək
+    if not search_string:
         return
 
-    # 2. Find the heap in /proc/[pid]/maps
     try:
+        # 2. Maps faylını oxuyub heap-in yerini tapırıq
         with open(f"/proc/{pid}/maps", "r") as maps_file:
-            heap_start = None
-            heap_end = None
-
             for line in maps_file:
                 if "[heap]" in line:
-                    # Line format: 555e646e0000-555e64701000 rw-p 00000000 00:00 0 [heap]
-                    parts = line.split()
-                    addr_range = parts.split('-')
-                    heap_start = int(addr_range, 16)
-                    heap_end = int(addr_range, 16)
+                    # Adres hissəsini götürürük (məs: 00400000-00421000)
+                    addr_range = line.split()
+                    start_addr, end_addr = [int(x, 16) for x in addr_range.split('-')]
                     break
+            else:
+                # Əgər heap tapılmasa
+                return
 
-            if heap_start is None or heap_end is None:
-                print(f"Error: [heap] not found for PID {pid}")
-                sys.exit(1)
-
-        # 3. Read and Write in /proc/[pid]/mem
+        # 3. Mem faylını "rb+" (oxumaq və yazmaq) rejimində açırıq
         with open(f"/proc/{pid}/mem", "rb+") as mem_file:
-            # Move pointer to start of heap and read its content
-            mem_file.seek(heap_start)
-            heap_data = mem_file.read(heap_end - heap_start)
+            # Heap-in başladığı yerə gedirik
+            mem_file.seek(start_addr)
+            heap_data = mem_file.read(end_addr - start_addr)
 
-            # Find the string in the bytes data
+            # Stringi axtarırıq (bytes formatında)
             try:
-                # Convert search string to bytes
-                offset = heap_data.index(bytes(search_string, "ascii"))
+                index = heap_data.index(search_string.encode('ascii'))
             except ValueError:
-                print(f"Error: String '{search_string}' not found in heap.")
-                sys.exit(1)
+                # String tapılmasa heç nə etmə
+                return
 
-            # Move pointer to the exact location where the string was found
-            mem_file.seek(heap_start + offset)
-
-            # Write the replacement string (as bytes)
-            mem_file.write(bytes(replace_string, "ascii"))
-
-    except PermissionError:
-        print("Permission denied: Try running with sudo.")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}")
+            # Stringin tapıldığı tam ünvanı hesablayırıq
+            found_at = start_addr + index
+            
+            # Həmin ünvana gedirik və yeni stringi yazırıq
+            mem_file.seek(found_at)
+            mem_file.write(replace_string.encode('ascii'))
+            
+    except Exception:
+        # Hər hansı icazə və ya sistem xətası olsa exit(1)
         sys.exit(1)
 
 if __name__ == "__main__":
-    read_write_heap()
+    solve()
