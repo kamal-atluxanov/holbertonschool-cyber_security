@@ -1,102 +1,81 @@
 #!/usr/bin/python3
-
 """
-read_write_heap.py - Script to search and replace a string in
-the heap of a running process.
-
-Usage:
-    python3 read_write_heap.py pid search_string replace_string
-
-Arguments:
-    pid - Process ID of the target process
-    search_string - ASCII string to search for in the heap
-    replace_string - ASCII string to replace the search_string
+İşləyən prosesin heap sahəsindəki stringi tapan və onu əvəz edən skript.
+İstifadə: ./read_write_heap.py pid search_string replace_string
 """
 
 import sys
 
-
-def find_and_replace_in_heap(pid, search_string, replace_string):
+def find_and_replace_in_heap():
     """
-    Find and replace a string in the heap memory of a running process.
-
-    Parameters:
-        pid (int): Process ID of the target process
-        search_string (bytes): String to search for in the heap
-        replace_string (bytes): String to replace the search_string
+    Prosesin ID-sini (pid) alır, heap sahəsini tapır və
+    göstərilən stringi yenisi ilə əvəz edir.
     """
+    # 1. Arqument sayını yoxla (Düzgün istifadə xətası üçün status 1)
+    if len(sys.argv) != 4:
+        print("Usage: read_write_heap.py pid search_string replace_string")
+        sys.exit(1)
+
+    pid = sys.argv
+    search_str = sys.argv
+    replace_str = sys.argv
+
+    # PID-nin rəqəm olub-olmadığını yoxla
+    if not pid.isdigit():
+        print("Usage: read_write_heap.py pid search_string replace_string")
+        sys.exit(1)
+
     maps_path = f"/proc/{pid}/maps"
     mem_path = f"/proc/{pid}/mem"
 
     try:
-        # Open the maps file to locate the heap segment
-        with open(maps_path, "r") as maps_file:
-            heap = None
+        # 2. Maps faylını oxuyub heap sahəsini tapırıq
+        with open(maps_path, 'r') as maps_file:
+            heap_line = None
             for line in maps_file:
                 if "[heap]" in line:
-                    heap = line
+                    heap_line = line
                     break
 
-            if not heap:
-                print("Error: Could not find the heap segment.")
-
-            # Parse the heap segment's memory range
-            heap_start, heap_end = [int(x, 16)
-                                    for x in heap.split()[0].split("-")]
-        # Open the memory file to search and replace in the heap
-        with open(mem_path, "r+b") as mem_file:
-            mem_file.seek(heap_start)
-            heap_data = mem_file.read(heap_end - heap_start)
-
-            # Ensure the replacement string is not longer
-            # than the search string
-            if len(replace_string) > len(search_string):
-                print(
-                    "Warning: Replacement string is longer"
-                    "than the search string."
-                    "This may cause memory corruption."
-                    )
-
-            # Search for the target string in the heap
-            offset = heap_data.find(search_string)
-            if offset == -1:
-                print("Error: Search string not found in the heap.")
+            if not heap_line:
+                # Heap tapılmadısa səssizcə çıxmaq və ya xəta vermək olar
                 sys.exit(1)
 
-            # Replace the string in the memory
-            mem_file.seek(heap_start + offset)
-            mem_file.write(replace_string.ljust(len(search_string), b'\x00'))
+            # Ünvan hissəsini ayırırıq (məs: 555e646e0000-555e64701000)
+            addr_range = heap_line.split().split('-')
+            start_addr = int(addr_range, 16)
+            end_addr = int(addr_range, 16)
 
-            print(
-                "SUCCESS!")
+        # 3. Mem faylını ikili formatda (binary) yazıb-oxumaq üçün açırıq
+        with open(mem_path, 'rb+') as mem_file:
+            mem_file.seek(start_addr)
+            heap_data = mem_file.read(end_addr - start_addr)
 
-    except PermissionError:
-        print("Error: Permission denied. Try running as sudo.")
+            # Axtarılan stringi bayt formatına çeviririk
+            search_bytes = search_str.encode('ascii')
+
+            # Stringin yerini (offset) tapırıq
+            offset = heap_data.find(search_bytes)
+            if offset == -1:
+                # Əgər string tapılmadısa, sistem bunu xəta sayır
+                sys.exit(1)
+
+            # Yazılacaq ünvanı müəyyən edib yeni mətni yazırıq
+            mem_file.seek(start_addr + offset)
+
+            # QEYD: Yeni stringi yazırıq. Uzunluq fərqi varsa belə,
+            # biz sadəcə verilən mətni yazırıq (ASCII).
+            mem_file.write(replace_str.encode('ascii'))
+
+            # Yalnız bir dəfə uğur mesajı çap edirik
+            print("SUCCESS!")
+
+    except (PermissionError, FileNotFoundError):
+        # İcazə yoxdursa və ya proses tapılmadısa
         sys.exit(1)
-    except FileNotFoundError:
-        print("Error: Process not found. Is the PID correct?")
+    except Exception:
+        # Digər gözlənilməz xətalar üçün
         sys.exit(1)
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        sys.exit(1)
-
-
-def main():
-    """
-    Main function to handle input arguments
-    and execute the heap string replacement.
-    """
-
-    try:
-        pid = int(sys.argv[1])
-    except ValueError:
-        print("Error: PID must be an integer.")
-
-    search_string = sys.argv[2].encode()
-    replace_string = sys.argv[3].encode()
-
-    find_and_replace_in_heap(pid, search_string, replace_string)
-
 
 if __name__ == "__main__":
-    main()
+    find_and_replace_in_heap()
