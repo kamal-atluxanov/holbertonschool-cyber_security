@@ -1,62 +1,62 @@
 #!/usr/bin/python3
 """
 Finds and replaces a string in the heap of a running process.
-Usage: ./read_write_heap.py pid search_string replace_string
+Usage: read_write_heap.py pid search_string replace_string
 """
 
 import sys
 
-def main():
-    # 1. Arqument sayını yoxla
+def solve():
+    # 1. Arqumentlərin yoxlanılması
     if len(sys.argv) != 4:
         print("Usage: read_write_heap.py pid search_string replace_string")
         sys.exit(1)
 
     pid = sys.argv
-    search_string = sys.argv
-    replace_string = sys.argv
+    search_str = sys.argv
+    replace_str = sys.argv
 
-    # Əgər axtarılan string boşdursa, heç nə etmə
-    if not search_string:
+    if not search_str:
         return
 
     try:
-        # 2. Maps faylından heap-in koordinatlarını tap
-        with open("/proc/{}/maps".format(pid), "r") as maps_file:
-            start_addr = None
-            end_addr = None
-            for line in maps_file:
+        # 2. Heap-in yerini /proc/[pid]/maps-dan tapırıq
+        maps_path = "/proc/{}/maps".format(pid)
+        mem_path = "/proc/{}/mem".format(pid)
+
+        start_addr = None
+        end_addr = None
+
+        with open(maps_path, "r") as f:
+            for line in f:
                 if "[heap]" in line:
-                    # Format: 00c61000-00c82000 rw-p ... [heap]
-                    addr_range = line.split()
-                    start_hex, end_hex = addr_range.split('-')
-                    start_addr = int(start_hex, 16)
-                    end_addr = int(end_hex, 16)
+                    # Adres hissəsini götür: "00c61000-00c82000"
+                    addrs = line.split().split('-')
+                    start_addr = int(addrs, 16)
+                    end_addr = int(addrs, 16)
                     break
-            
-            if start_addr is None:
-                return # Heap tapılmasa çıx
 
-        # 3. Mem faylına daxil olub dəyişikliyi et
-        with open("/proc/{}/mem".format(pid), "rb+") as mem_file:
-            # Heap-i oxu
-            mem_file.seek(start_addr)
-            heap_content = mem_file.read(end_addr - start_addr)
+        if start_addr is None:
+            return
 
-            # Stringi axtar (ASCII baytlar kimi)
+        # 3. Yaddaşda axtarış və dəyişiklik
+        with open(mem_path, "rb+") as f:
+            f.seek(start_addr)
+            heap_data = f.read(end_addr - start_addr)
+
+            # Stringi ASCII baytlar kimi tapırıq
             try:
-                index = heap_content.index(search_string.encode('ascii'))
+                offset = heap_data.index(search_str.encode('ascii'))
             except ValueError:
-                return # Tapılmasa çıx
+                return # Tapılmasa heç nə etmə
 
-            # Tapılan yerə qayıt və yeni stringi yaz
-            mem_file.seek(start_addr + index)
-            mem_file.write(replace_string.encode('ascii'))
+            # Tam ünvana get və yeni stringi yaz
+            f.seek(start_addr + offset)
+            # VACİB: Yazarkən replace_str-in sonuna NULL byte (\x00) qoyulmalıdır
+            f.write(replace_str.encode('ascii') + b'\x00')
 
-    except (PermissionError, ProcessLookupError):
-        sys.exit(1)
     except Exception:
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    solve()
