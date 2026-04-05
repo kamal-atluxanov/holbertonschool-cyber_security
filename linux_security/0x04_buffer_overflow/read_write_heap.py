@@ -48,11 +48,11 @@ def solve():
 
             # Stringin tapıldığı tam ünvanı hesablayırıq
             found_at = start_addr + index
-            
+
             # Həmin ünvana gedirik və yeni stringi yazırıq
             mem_file.seek(found_at)
             mem_file.write(replace_string.encode('ascii'))
-            
+
     except Exception:
         # Hər hansı icazə və ya sistem xətası olsa exit(1)
         sys.exit(1)
