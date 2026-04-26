@@ -1,2 +1,2 @@
 #!/bin/bash
-nmap -sV --script nmap-vulners/ $1 -p80,443
+nmap -p 80,443 --script vulners "$1"
