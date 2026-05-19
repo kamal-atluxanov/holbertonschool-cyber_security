@@ -1,76 +1,88 @@
-#!/usr/bin/env ruby
 require 'optparse'
 
+# File to store tasks
 TASKS_FILE = 'tasks.txt'
 
-# Əgər tasks.txt faylı yoxdursa, boş yaradırıq
-File.open(TASKS_FILE, 'w').close unless File.exist?(TASKS_FILE)
-
-options = {}
-
-opt_parser = OptionParser.new do |opts|
-  opts.banner = "Usage: cli.rb [options]"
-
-  opts.on("-a", "--add TASK", "Add a new task") do |task|
-    options[:add] = task
+# Load tasks from the file or initialize an empty array
+def load_tasks
+  if File.exist?(TASKS_FILE)
+    File.readlines(TASKS_FILE).map(&:chomp)
+  else
+    []
   end
-
-  opts.on("-l", "--list", "List all tasks") do
-    options[:list] = true
-  end
-
-  opts.on("-r", "--remove INDEX", "Remove a task by index") do |index|
-    options[:remove] = index.to_i
-  end
-
-  # Optparse avtomatik -h və --help dəstəkləyir, lakin çıxış tam nümunədəki kimi olsun deyə bannerlə işləyir
 end
 
-begin
-  opt_parser.parse!(ARGV)
-rescue OptionParser::InvalidOption, OptionParser::MissingArgument => e
-  puts e.validate
-  puts opt_parser
-  exit 1
+# Save tasks to the file
+def save_tasks(tasks)
+  File.open(TASKS_FILE, 'w') do |file|
+    tasks.each { |task| file.puts(task) }
+  end
 end
 
-# --- Task Əlavə Etmək (-a, --add) ---
-if options[:add]
-  task_name = options[:add]
-  File.open(TASKS_FILE, 'a') do |file|
-    file.puts(task_name)
-  end
-  puts "Task '#{task_name}' added."
+# Add a new task
+def add_task(task)
+  tasks = load_tasks
+  tasks << task
+  save_tasks(tasks)
+  puts "Task '#{task}' added."
+end
 
-# --- Taskları Siyahılamaq (-l, --list) ---
-elsif options[:list]
-  tasks = File.readlines(TASKS_FILE).map(&:strip).reject(&:empty?)
+# List all tasks
+def list_tasks
+  tasks = load_tasks
   if tasks.empty?
     puts "No tasks found."
   else
+    puts "Tasks:"
     tasks.each_with_index do |task, index|
       puts "#{index + 1}. #{task}"
     end
   end
+end
 
-# --- Task Silmək (-r, --remove) ---
-elsif options[:remove]
-  target_index = options[:remove]
-  tasks = File.readlines(TASKS_FILE).map(&:strip).reject(&:empty?)
-
-  if target_index > 0 && target_index <= tasks.length
-    removed_task = tasks.delete_at(target_index - 1)
-    
-    # Yenilənmiş siyahını fayla yazırıq
-    File.open(TASKS_FILE, 'w') do |file|
-      tasks.each { |task| file.puts(task) }
-    end
-    puts "Task '#{removed_task}' removed."
+# Remove a task by index
+def remove_task(index)
+  tasks = load_tasks
+  if index < 1 || index > tasks.size
+    puts "Error: Invalid task index."
   else
-    puts "Invalid index. Task not found."
+    removed_task = tasks.delete_at(index - 1)
+    save_tasks(tasks)
+    puts "Task '#{removed_task}' removed."
+  end
+end
+
+# CLI options parsing
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: cli.rb [options]"
+
+  opts.on('-a', '--add TASK', 'Add a new task') do |task|
+    options[:add] = task
   end
 
-# --- Heç bir parametr ötürülməyibsə və ya -h yazılıbsa ---
+  opts.on('-l', '--list', 'List all tasks') do
+    options[:list] = true
+  end
+
+  opts.on('-r', '--remove INDEX', Integer, 'Remove a task by index') do |index|
+    options[:remove] = index
+  end
+
+  opts.on('-h', '--help', 'Show help') do
+    puts opts
+    exit
+  end
+end.parse!
+
+# Handle options
+if options[:add]
+  add_task(options[:add])
+elsif options[:list]
+  list_tasks
+elsif options[:remove]
+  remove_task(options[:remove])
 else
-  puts opt_parser
+  puts "Usage: cli.rb [options]"
+  puts "Run with -h for help."
 end
