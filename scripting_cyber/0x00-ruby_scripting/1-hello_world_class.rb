@@ -1,5 +1,12 @@
 #!/usr/bin/env ruby
 
-def say_hello(str)
-    puts "Hello, Holberton! from #{str}"
-end
+class HelloWorld
+    def initialize
+        @message = "Hello, World!"
+    end
+
+    #Method to print the message
+    def print_hello
+        puts @message
+    end
+end 
